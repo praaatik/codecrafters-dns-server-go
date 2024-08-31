@@ -1,6 +1,8 @@
 package main
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+)
 
 func (header *DNSHeader) toBytes() []byte {
 	buffer := make([]byte, 12) // DNS header = 12 bytes
@@ -14,3 +16,39 @@ func (header *DNSHeader) toBytes() []byte {
 
 	return buffer
 }
+
+func encodeDomainName(domain string) []byte {
+	encoded := []byte{}
+	labels := []byte(domain)
+	currentLabel := []byte{}
+
+	for _, b := range labels {
+		if b == '.' {
+			encoded = append(encoded, byte(len(currentLabel)))
+			encoded = append(encoded, currentLabel...)
+			currentLabel = []byte{}
+		} else {
+			currentLabel = append(currentLabel, b)
+		}
+	}
+	encoded = append(encoded, byte(len(currentLabel)))
+	encoded = append(encoded, currentLabel...)
+	encoded = append(encoded, 0x00) // Null byte to end the domain name
+
+	return encoded
+}
+
+//func encodeURL(url string) []byte {
+//	encodedURL := []byte{}
+//
+//	for _, seg := range strings.Split(url, ".") {
+//		n := len(seg)
+//		encodedURL = append(encodedURL, byte(n))
+//		encodedURL = append(encodedURL, []byte(seg)...)
+//	}
+//	// append null
+//	fmt.Println(encodedURL)
+//	fmt.Printf("%x\n", encodedURL)
+//	return append(encodedURL, 0x00)
+//}
+//

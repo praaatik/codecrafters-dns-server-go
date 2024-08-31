@@ -41,6 +41,14 @@ func main() {
 		}
 
 		receivedData := string(buf[:size])
+
+		fmt.Println("start=======>")
+		fmt.Println(string(buf)[:20])
+		fmt.Println("**")
+		fmt.Println(receivedData)
+		fmt.Println("**")
+		fmt.Println("end=======>")
+
 		fmt.Printf("Received %d bytes from %s: %s\n", size, source, receivedData)
 
 		header := DNSHeader{
@@ -53,17 +61,29 @@ func main() {
 			RA:      0,    // Recursion available
 			Z:       0,    // Reserved
 			RCODE:   0,    // No error
-			QDCOUNT: 0,    // One question in the query
+			QDCOUNT: 1,    // One question in the query
 			ANCOUNT: 0,    // One answer
 			NSCOUNT: 0,    // No authority records
 			ARCOUNT: 0,    // No additional records
 		}
 		response := header.toBytes()
 
-		b, err := udpConn.WriteToUDP(response, source)
+		questionSection := encodeDomainName("codecrafters.io")
+		questionSection = append(questionSection, 0x00, 0x01) // QTYPE A
+		questionSection = append(questionSection, 0x00, 0x01)
+
+		//answer := make([]byte, 16)
+		//copy(answer[:12], receivedData[12:]) // Copy the domain name from question to answer
+		//questionSection := []byte{0x0B, 'c', 'o', 'd', 'e', 'c', 'r', 'a', 'f', 't', 'e', 'r', 's', 0x02, 'i', 'o', 0x00}
+		//questionSection = append(questionSection, 0x00, 0x01) // QTYPE A
+		//questionSection = append(questionSection, 0x00, 0x01) // QCLASS IN
+
+		response = append(response, questionSection...)
+
+		_, err = udpConn.WriteToUDP(response, source)
 		if err != nil {
 			fmt.Println("Failed to send response:", err)
 		}
-		fmt.Println(b)
+		//fmt.Println(b)
 	}
 }
