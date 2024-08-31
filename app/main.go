@@ -5,7 +5,6 @@ import (
 	"net"
 )
 
-// Ensures gofmt doesn't remove the "net" import in stage 1 (feel free to remove this!)
 var _ = net.ListenUDP
 
 func main() {
@@ -35,6 +34,7 @@ func main() {
 
 	for {
 		size, source, err := udpConn.ReadFromUDP(buf)
+		fmt.Println(size, source, err)
 		if err != nil {
 			fmt.Println("Error receiving data:", err)
 			break
@@ -43,12 +43,27 @@ func main() {
 		receivedData := string(buf[:size])
 		fmt.Printf("Received %d bytes from %s: %s\n", size, source, receivedData)
 
-		// Create an empty response
-		response := []byte{}
+		header := DNSHeader{
+			ID:      1234, // Example ID
+			QR:      1,    // Set QR to 1 for response
+			OPCODE:  0,    // Standard query
+			AA:      0,    // Not authoritative
+			TC:      0,    // Not truncated
+			RD:      0,    // Recursion not desired
+			RA:      0,    // Recursion available
+			Z:       0,    // Reserved
+			RCODE:   0,    // No error
+			QDCOUNT: 0,    // One question in the query
+			ANCOUNT: 0,    // One answer
+			NSCOUNT: 0,    // No authority records
+			ARCOUNT: 0,    // No additional records
+		}
+		response := header.toBytes()
 
-		_, err = udpConn.WriteToUDP(response, source)
+		b, err := udpConn.WriteToUDP(response, source)
 		if err != nil {
 			fmt.Println("Failed to send response:", err)
 		}
+		fmt.Println(b)
 	}
 }
