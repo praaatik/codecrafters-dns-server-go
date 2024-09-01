@@ -91,3 +91,55 @@ func parseQuestionSection(buf []byte) (string, uint16, uint16) {
 
 	return qname, qtype, qclass
 }
+
+type DNSQuestion struct {
+	Name  string
+	Type  []byte
+	Class []byte
+}
+
+func parseQuestions(buf []byte, offset int, count int) ([]DNSQuestion, int) {
+	questions := []DNSQuestion{}
+
+	for i := 0; i < count; i++ {
+		qname, newOffset := parseDomainName(buf, offset)
+		qtype := buf[newOffset : newOffset+2]
+		qclass := buf[newOffset+2 : newOffset+4]
+		offset = newOffset + 4
+
+		questions = append(questions, DNSQuestion{
+			Name:  qname,
+			Type:  qtype,
+			Class: qclass,
+		})
+	}
+
+	return questions, offset
+}
+
+func parseDomainName(buf []byte, offset int) (string, int) {
+	labels := []string{}
+	for {
+		length := int(buf[offset])
+
+		// Check if the label is a pointer
+		if length&0xC0 == 0xC0 {
+			pointer := int(binary.BigEndian.Uint16(buf[offset:offset+2]) & 0x3FFF)
+			label, _ := parseDomainName(buf, pointer)
+			labels = append(labels, label)
+			offset += 2
+			break
+		}
+
+		// Zero length means end of the name
+		if length == 0 {
+			offset++
+			break
+		}
+
+		offset++
+		labels = append(labels, string(buf[offset:offset+length]))
+		offset += length
+	}
+	return strings.Join(labels, "."), offset
+}
