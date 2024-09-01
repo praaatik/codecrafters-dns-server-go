@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+// toBytes serializes the DNSHeader into a 12-byte array in network byte order.
+// This function is used to convert the DNSHeader struct into a byte slice for transmission over a network.
 func (header *DNSHeader) toBytes() []byte {
 	buffer := make([]byte, 12) // DNS header = 12 bytes
 
@@ -20,6 +22,9 @@ func (header *DNSHeader) toBytes() []byte {
 	return buffer
 }
 
+// encodeDomainName converts a human-readable domain name (e.g., "example.com")
+// into the DNS format, where each label is prefixed by its length.
+// The result is terminated with a null byte (0x00).
 func encodeDomainName(domain string) []byte {
 	encoded := []byte{}
 	labels := strings.Split(domain, ".")
@@ -34,16 +39,20 @@ func encodeDomainName(domain string) []byte {
 	return encoded
 }
 
+// parseDNSHeader decodes a 12-byte slice into a DNSHeader struct.
+// This function extracts all fields from the DNS header, including flags and counts.
 func parseDNSHeader(buf []byte) DNSHeader {
-	id := binary.BigEndian.Uint16(buf[0:2])
-	flags := binary.BigEndian.Uint16(buf[2:4])
-	opcode := (flags >> 11) & 0x0F
-	rd := (flags >> 8) & 0x01
+	id := binary.BigEndian.Uint16(buf[0:2])    // id field
+	flags := binary.BigEndian.Uint16(buf[2:4]) // flags
+	opcode := (flags >> 11) & 0x0F             // opcode field
+	rd := (flags >> 8) & 0x01                  // RG flag
 
+	// Extract counts of questions, authority records, and additional records
 	qdcount := binary.BigEndian.Uint16(buf[4:6])
 	nscount := binary.BigEndian.Uint16(buf[8:10])
 	arcount := binary.BigEndian.Uint16(buf[10:12])
 
+	// Construct the DNSHeader struct with decoded values
 	header := DNSHeader{
 		ID:      id,
 		QR:      1,      // Set QR to 1 for response
@@ -60,6 +69,7 @@ func parseDNSHeader(buf []byte) DNSHeader {
 		ARCOUNT: arcount,
 	}
 
+	// If not a standard query, set the RCODE to 4 (Not Implemented)
 	if opcode != 0 { // If not a standard query, set RCODE to 4
 		header.RCODE = 4
 	}
@@ -67,6 +77,8 @@ func parseDNSHeader(buf []byte) DNSHeader {
 	return header
 }
 
+// parseQuestions parses the DNS questions from a query packet starting from a given offset.
+// It returns a slice of DNSQuestion structs and the new offset after parsing.
 func parseQuestions(buf []byte, offset int, count int) ([]DNSQuestion, int) {
 	questions := []DNSQuestion{}
 
@@ -113,6 +125,8 @@ func parseDomainName(buf []byte, offset int) (string, int) {
 	return strings.Join(labels, "."), offset
 }
 
+// forwardDNSQuery sends a DNS query to the specified resolver and returns the response.
+// It handles communication over UDP and includes error handling for network issues.
 func forwardDNSQuery(query []byte, resolverAddr *net.UDPAddr) ([]byte, error) {
 	conn, err := net.DialUDP("udp", nil, resolverAddr)
 	if err != nil {
@@ -134,6 +148,9 @@ func forwardDNSQuery(query []byte, resolverAddr *net.UDPAddr) ([]byte, error) {
 	return response, nil
 }
 
+// handleQuery processes incoming DNS queries, forwards them to a specified resolver,
+// and returns the response to the original requester.
+// It handles single and multiple questions by splitting and combining responses as needed.
 func handleQuery(query []byte, resolverAddr *net.UDPAddr, udpConn *net.UDPConn, source *net.UDPAddr) {
 	// Parse the DNS header
 	header := parseDNSHeader(query[:12])
