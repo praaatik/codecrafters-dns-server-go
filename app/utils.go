@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/binary"
+	"fmt"
+	"net"
 	"strings"
 )
 
@@ -39,7 +41,6 @@ func parseDNSHeader(buf []byte) DNSHeader {
 	rd := (flags >> 8) & 0x01
 
 	qdcount := binary.BigEndian.Uint16(buf[4:6])
-	//ancount := binary.BigEndian.Uint16(buf[6:8])
 	nscount := binary.BigEndian.Uint16(buf[8:10])
 	arcount := binary.BigEndian.Uint16(buf[10:12])
 
@@ -54,7 +55,7 @@ func parseDNSHeader(buf []byte) DNSHeader {
 		Z:       0,      // Reserved
 		RCODE:   0,      // No error if standard query; else 4
 		QDCOUNT: qdcount,
-		ANCOUNT: 1, // One answer
+		ANCOUNT: 0, // Will be set dynamically
 		NSCOUNT: nscount,
 		ARCOUNT: arcount,
 	}
@@ -64,38 +65,6 @@ func parseDNSHeader(buf []byte) DNSHeader {
 	}
 
 	return header
-}
-
-func parseQuestionSection(buf []byte) (string, uint16, uint16) {
-	// Parse QNAME (domain name)
-	var qnameParts []string
-	offset := 0
-	for {
-		length := int(buf[offset])
-		if length == 0 {
-			offset++
-			break
-		}
-		offset++
-		qnameParts = append(qnameParts, string(buf[offset:offset+length]))
-		offset += length
-	}
-	qname := strings.Join(qnameParts, ".")
-
-	// Parse QTYPE (2 bytes)
-	qtype := binary.BigEndian.Uint16(buf[offset : offset+2])
-	offset += 2
-
-	// Parse QCLASS (2 bytes)
-	qclass := binary.BigEndian.Uint16(buf[offset : offset+2])
-
-	return qname, qtype, qclass
-}
-
-type DNSQuestion struct {
-	Name  string
-	Type  []byte
-	Class []byte
 }
 
 func parseQuestions(buf []byte, offset int, count int) ([]DNSQuestion, int) {
@@ -142,4 +111,91 @@ func parseDomainName(buf []byte, offset int) (string, int) {
 		offset += length
 	}
 	return strings.Join(labels, "."), offset
+}
+
+func forwardDNSQuery(query []byte, resolverAddr *net.UDPAddr) ([]byte, error) {
+	conn, err := net.DialUDP("udp", nil, resolverAddr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to dial resolver: %v", err)
+	}
+	defer conn.Close()
+
+	_, err = conn.Write(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send query to resolver: %v", err)
+	}
+
+	response := make([]byte, 512)
+	_, _, err = conn.ReadFromUDP(response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to receive response from resolver: %v", err)
+	}
+
+	return response, nil
+}
+
+func handleQuery(query []byte, resolverAddr *net.UDPAddr, udpConn *net.UDPConn, source *net.UDPAddr) {
+	// Parse the DNS header
+	header := parseDNSHeader(query[:12])
+
+	// Parse questions
+	questions, offset := parseQuestions(query, 12, int(header.QDCOUNT))
+
+	if len(questions) > 1 {
+		// Forward each question separately
+		var responses [][]byte
+		for i := 0; i < len(questions); i++ {
+			// Create a DNS query for each question
+			queryPart := query[:12]
+			queryPart = append(queryPart, encodeDomainName(questions[i].Name)...)
+			queryPart = append(queryPart, questions[i].Type...)
+			queryPart = append(queryPart, questions[i].Class...)
+
+			// Append the rest of the query (if applicable)
+			if offset < len(query) {
+				queryPart = append(queryPart, query[offset:]...)
+			}
+
+			// Forward the query to the resolver
+			response, err := forwardDNSQuery(queryPart, resolverAddr)
+			if err != nil {
+				fmt.Println("Failed to forward query:", err)
+				continue
+			}
+			responses = append(responses, response)
+		}
+
+		// Combine responses
+		var combinedResponse []byte
+		for _, res := range responses {
+			combinedResponse = append(combinedResponse, res[12:]...) // Skip the header (12 bytes)
+		}
+
+		// Include the original header
+		combinedHeader := header
+		combinedHeader.ANCOUNT = uint16(len(responses))
+		combinedHeader.QDCOUNT = uint16(len(questions))
+		combinedResponseHeader := combinedHeader.toBytes()
+		combinedResponse = append(combinedResponseHeader, combinedResponse...)
+
+		// Send the combined response back to the client
+		_, err := udpConn.WriteToUDP(combinedResponse, source)
+		if err != nil {
+			fmt.Println("Failed to send combined response:", err)
+		}
+		return
+	}
+
+	// Forward the query to the resolver
+	response, err := forwardDNSQuery(query[:offset], resolverAddr)
+	if err != nil {
+		fmt.Println("Failed to forward query:", err)
+		return
+	}
+
+	// Send the resolver's response back to the client
+	_, err = udpConn.WriteToUDP(response, source)
+	if err != nil {
+		fmt.Println("Failed to send response:", err)
+	}
 }
