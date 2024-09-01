@@ -37,3 +37,37 @@ func encodeDomainName(domain string) []byte {
 
 	return encoded
 }
+
+func parseDNSHeader(buf []byte) DNSHeader {
+	id := binary.BigEndian.Uint16(buf[0:2])
+	flags := binary.BigEndian.Uint16(buf[2:4])
+	opcode := (flags >> 11) & 0x0F
+	rd := (flags >> 8) & 0x01
+
+	qdcount := binary.BigEndian.Uint16(buf[4:6])
+	//ancount := binary.BigEndian.Uint16(buf[6:8])
+	nscount := binary.BigEndian.Uint16(buf[8:10])
+	arcount := binary.BigEndian.Uint16(buf[10:12])
+
+	header := DNSHeader{
+		ID:      id,
+		QR:      1,      // Set QR to 1 for response
+		OPCODE:  opcode, // Mimic OPCODE
+		AA:      0,      // Not authoritative
+		TC:      0,      // Not truncated
+		RD:      rd,     // Mimic RD
+		RA:      0,      // Recursion not available
+		Z:       0,      // Reserved
+		RCODE:   0,      // No error if standard query; else 4
+		QDCOUNT: qdcount,
+		ANCOUNT: 1, // One answer
+		NSCOUNT: nscount,
+		ARCOUNT: arcount,
+	}
+
+	if opcode != 0 { // If not a standard query, set RCODE to 4
+		header.RCODE = 4
+	}
+
+	return header
+}

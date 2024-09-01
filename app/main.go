@@ -40,34 +40,13 @@ func main() {
 			break
 		}
 
-		receivedData := string(buf[:size])
+		requestHeader := parseDNSHeader(buf[:12])
 
-		fmt.Println("start=======>")
-		fmt.Println(string(buf)[:20])
-		fmt.Println("**")
-		fmt.Println(receivedData)
-		fmt.Println("**")
-		fmt.Println("end=======>")
+		//response header is the same as the request header
+		responseHeader := requestHeader
+		response := responseHeader.toBytes()
 
-		fmt.Printf("Received %d bytes from %s: %s\n", size, source, receivedData)
-
-		header := DNSHeader{
-			ID:      1234, // Example ID
-			QR:      1,    // Set QR to 1 for response
-			OPCODE:  0,    // Standard query
-			AA:      0,    // Not authoritative
-			TC:      0,    // Not truncated
-			RD:      0,    // Recursion not desired
-			RA:      0,    // Recursion available
-			Z:       0,    // Reserved
-			RCODE:   0,    // No error
-			QDCOUNT: 1,    // One question in the query
-			ANCOUNT: 1,    // One answer
-			NSCOUNT: 0,    // No authority records
-			ARCOUNT: 0,    // No additional records
-		}
-		response := header.toBytes()
-
+		// to the future reading me, values are taken from the challenge itself.
 		questionSection := encodeDomainName("codecrafters.io")
 		questionSection = append(questionSection, 0x00, 0x01) // QTYPE A
 		questionSection = append(questionSection, 0x00, 0x01) // QCLASS
