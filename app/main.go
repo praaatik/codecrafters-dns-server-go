@@ -40,20 +40,25 @@ func main() {
 			break
 		}
 
+		// first 12 bits are for the header
 		requestHeader := parseDNSHeader(buf[:12])
 
+		// remaining are for the question
+		questionName, _, _ := parseQuestionSection(buf[12:])
+		//fmt.Printf("Received Query - Name: %s, Type: %d, Class: %d\n", questionName, questionType, questionClass)
+
+		// to the future reading me, values are taken from the challenge itself.
 		//response header is the same as the request header
 		responseHeader := requestHeader
 		response := responseHeader.toBytes()
 
-		// to the future reading me, values are taken from the challenge itself.
-		questionSection := encodeDomainName("codecrafters.io")
+		questionSection := encodeDomainName(questionName)
 		questionSection = append(questionSection, 0x00, 0x01) // QTYPE A
 		questionSection = append(questionSection, 0x00, 0x01) // QCLASS
 
 		response = append(response, questionSection...)
 
-		answerSection := encodeDomainName("codecrafters.io")
+		answerSection := encodeDomainName(questionName)
 		answerSection = append(answerSection, 0x00, 0x01)             // TYPE A
 		answerSection = append(answerSection, 0x00, 0x01)             // CLASS IN
 		answerSection = append(answerSection, 0x00, 0x00, 0x00, 0x3C) // TTL (60 seconds)

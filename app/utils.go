@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"strings"
 )
 
 func (header *DNSHeader) toBytes() []byte {
@@ -19,21 +20,14 @@ func (header *DNSHeader) toBytes() []byte {
 
 func encodeDomainName(domain string) []byte {
 	encoded := []byte{}
-	labels := []byte(domain)
-	currentLabel := []byte{}
-
-	for _, b := range labels {
-		if b == '.' {
-			encoded = append(encoded, byte(len(currentLabel)))
-			encoded = append(encoded, currentLabel...)
-			currentLabel = []byte{}
-		} else {
-			currentLabel = append(currentLabel, b)
-		}
+	labels := strings.Split(domain, ".")
+	for _, label := range labels {
+		encoded = append(encoded, byte(len(label)))
+		encoded = append(encoded, label...)
 	}
-	encoded = append(encoded, byte(len(currentLabel)))
-	encoded = append(encoded, currentLabel...)
-	encoded = append(encoded, 0x00) // Null byte to end the domain name
+
+	// Null byte to end the domain name
+	encoded = append(encoded, 0x00)
 
 	return encoded
 }
@@ -70,4 +64,30 @@ func parseDNSHeader(buf []byte) DNSHeader {
 	}
 
 	return header
+}
+
+func parseQuestionSection(buf []byte) (string, uint16, uint16) {
+	// Parse QNAME (domain name)
+	var qnameParts []string
+	offset := 0
+	for {
+		length := int(buf[offset])
+		if length == 0 {
+			offset++
+			break
+		}
+		offset++
+		qnameParts = append(qnameParts, string(buf[offset:offset+length]))
+		offset += length
+	}
+	qname := strings.Join(qnameParts, ".")
+
+	// Parse QTYPE (2 bytes)
+	qtype := binary.BigEndian.Uint16(buf[offset : offset+2])
+	offset += 2
+
+	// Parse QCLASS (2 bytes)
+	qclass := binary.BigEndian.Uint16(buf[offset : offset+2])
+
+	return qname, qtype, qclass
 }
