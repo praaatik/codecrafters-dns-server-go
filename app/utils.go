@@ -37,18 +37,3 @@ func encodeDomainName(domain string) []byte {
 
 	return encoded
 }
-
-//func encodeURL(url string) []byte {
-//	encodedURL := []byte{}
-//
-//	for _, seg := range strings.Split(url, ".") {
-//		n := len(seg)
-//		encodedURL = append(encodedURL, byte(n))
-//		encodedURL = append(encodedURL, []byte(seg)...)
-//	}
-//	// append null
-//	fmt.Println(encodedURL)
-//	fmt.Printf("%x\n", encodedURL)
-//	return append(encodedURL, 0x00)
-//}
-//

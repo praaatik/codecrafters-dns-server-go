@@ -62,7 +62,7 @@ func main() {
 			Z:       0,    // Reserved
 			RCODE:   0,    // No error
 			QDCOUNT: 1,    // One question in the query
-			ANCOUNT: 0,    // One answer
+			ANCOUNT: 1,    // One answer
 			NSCOUNT: 0,    // No authority records
 			ARCOUNT: 0,    // No additional records
 		}
@@ -70,20 +70,22 @@ func main() {
 
 		questionSection := encodeDomainName("codecrafters.io")
 		questionSection = append(questionSection, 0x00, 0x01) // QTYPE A
-		questionSection = append(questionSection, 0x00, 0x01)
-
-		//answer := make([]byte, 16)
-		//copy(answer[:12], receivedData[12:]) // Copy the domain name from question to answer
-		//questionSection := []byte{0x0B, 'c', 'o', 'd', 'e', 'c', 'r', 'a', 'f', 't', 'e', 'r', 's', 0x02, 'i', 'o', 0x00}
-		//questionSection = append(questionSection, 0x00, 0x01) // QTYPE A
-		//questionSection = append(questionSection, 0x00, 0x01) // QCLASS IN
+		questionSection = append(questionSection, 0x00, 0x01) // QCLASS
 
 		response = append(response, questionSection...)
+
+		answerSection := encodeDomainName("codecrafters.io")
+		answerSection = append(answerSection, 0x00, 0x01)             // TYPE A
+		answerSection = append(answerSection, 0x00, 0x01)             // CLASS IN
+		answerSection = append(answerSection, 0x00, 0x00, 0x00, 0x3C) // TTL (60 seconds)
+		answerSection = append(answerSection, 0x00, 0x04)             // Data length (4 bytes for IPv4)
+		answerSection = append(answerSection, 0x08, 0x08, 0x08, 0x08) // RDATA (8.8.8.8)
+
+		response = append(response, answerSection...)
 
 		_, err = udpConn.WriteToUDP(response, source)
 		if err != nil {
 			fmt.Println("Failed to send response:", err)
 		}
-		//fmt.Println(b)
 	}
 }
